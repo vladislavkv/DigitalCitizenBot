@@ -4,7 +4,7 @@ import datetime
 from re import *
 from telebot import types
 
-token=''
+token='TOKEN'
 bot=telebot.TeleBot(token)
 
 conn=sqlite3.connect('usersDatabase.db')
@@ -12,11 +12,13 @@ cursor=conn.cursor()
 
 user_data={'number':'','fullName':'','dob':'','email':''}
 
+dob_pattern=compile('(0[1-9]|[12][0-9]|3[01])[.](0[1-9]|1[012])[.]((19|20)\d\d)$')
 email_pattern=compile('[-a-z0-9_.]+@([-a-z0-9]+\.)+[a-z]{2,}')
+fullName_engPattern=compile('([A-z]{2,}) ([A-z]{2,})')
+fullName_ruPattern=compile('([А-я]{2,}) ([А-я]{2,})')
 
-method=('Имя и фамилия','Дата рождения','E-mail')
+method=('имя и фамилия','дата рождения','e-mail')
 suffix=('ые ','ая ','ый ')
-
 
 def error(message):
     bot.send_message(message.chat.id,'Не правильн'+suffix[suf_ind]+method[meth_ind]+', попробуйте еще раз.')
@@ -24,7 +26,7 @@ def error(message):
         get_fullName(message)
     elif step == 2:
         get_dob(message)
-    else step == 3:
+    elif step == 3:
         get_email(message)
 
 @bot.message_handler(commands=['start'])
@@ -64,23 +66,37 @@ def get_fullName(message):
     step=1
     suf_ind=0
     meth_ind=0
-    bot.send_message(message.chat.id,'Введите полное имя и фамилию:')
+    keyboard=types.ReplyKeyboardRemove(selective=False)
+    bot.send_message(message.chat.id,'Введите полное имя и фамилию:',reply_markup=keyboard)
     bot.register_next_step_handler(message,reg_fullName)
 
 def reg_fullName(message):
-    user_data['fullName']=message.text
-    get_dob(message)
+    user_data['fullName']=message.text.strip(' ').title()
+    valid_fullName=fullName_engPattern.match(user_data['fullName']) or \
+                    fullName_ruPattern.match(user_data['fullName'])
+    if valid_fullName:
+        get_dob(message)
+    else:
+        error(message)
+
 def get_dob(message):
+    global step,suf_ind,meth_ind
     step=2
     suf_ind=1
     meth_ind=1
-    bot.send_message(message.chat.id,'Введите дату рождения:')
+    bot.send_message(message.chat.id,'Введите дату рождения (в формате mm.dd.yyyy):')
     bot.register_next_step_handler(message,reg_dob)
 
 def reg_dob(message):
     user_data['dob']=message.text
-    get_email(message)
+    valid_dob=dob_pattern.match(user_data['dob'])
+    if valid_dob:
+        get_email(message)
+    else:
+        error(message)
+
 def get_email(message):
+    global step,suf_ind,meth_ind
     step=3
     suf_ind=2
     meth_ind=2
@@ -89,24 +105,40 @@ def get_email(message):
 
 def reg_email(message):
     user_data['email']=message.text.replace(' ','').lower()
-    check_data(message)
-def check_data(message):
     valid_email=email_pattern.match(user_data['email'])
     if valid_email:
-        keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
-        confirm_button=types.KeyboardButton('Подтвердить')
-        again_button=types.KeyboardButton('Заново')
-        keyboard.row(confirm_button,again_button)
-        bot.send_message(message.chat.id,'Пожалуйста, проверьте еще раз и подтвердите введенные Вами данные:\n'
-                         '\nНомер телефона: '+user_data['number']+'\n'
-                         'Имя и фамилия: '+user_data['fullName']+'\n'
-                         'Дата рождения: '+user_data['dob']+'\n'
-                         'E-mail адрес: '+user_data['email'],reply_markup=keyboard)
+        check_data(message)
     else:
         error(message)
 
-    #cursor.execute('Insert into users values ("%s","%s","%s","%s")'% \
-    #               (user_data['number'],user_data['fullName'],user_data['dob'],user_data['email']))
-    #conn.commit()
-#conn.close()
+def check_data(message):
+    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    confirm_button=types.KeyboardButton('Подтвердить')
+    again_button=types.KeyboardButton('Заново')
+    keyboard.row(confirm_button,again_button)
+    bot.send_message(message.chat.id,'Пожалуйста, проверьте еще раз и подтвердите введенные Вами данные:\n'
+                     '\nНомер телефона: '+user_data['number']+'\n'
+                     'Имя и фамилия: '+user_data['fullName']+'\n'
+                     'Дата рождения: '+user_data['dob']+'\n'
+                     'E-mail адрес: '+user_data['email'],reply_markup=keyboard)
+    bot.register_next_step_handler(message,confirm_data)
+
+def confirm_data(message):
+    if message.text=='Подтвердить':
+        save_data(message)
+    elif message.text=='Заново':
+        get_fullName(message)
+    else:
+        bot.send_message(message.chat.id,'Пожалуйста, нажмите на кнопку.')
+        check_data(message)
+
+def save_data(message):
+    conn=sqlite3.connect('usersDatabase.db')
+    cursor=conn.cursor()
+    cursor.execute('Insert into users values ("%s","%s","%s","%s")'% \
+                   (user_data['number'],user_data['fullName'],user_data['dob'],user_data['email']))
+    conn.commit()
+    bot.send_message(message.chat.id,'После теста отпишитесь мне пожалуйста)')
+
+conn.close()
 bot.polling(none_stop=True)
