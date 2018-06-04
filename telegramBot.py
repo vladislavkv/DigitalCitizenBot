@@ -17,26 +17,18 @@ email_pattern=compile('[-a-z0-9_.]+@([-a-z0-9]+\.)+[a-z]{2,}')
 fullName_engPattern=compile('([A-z]{2,}) ([A-z]{2,})')
 fullName_ruPattern=compile('([А-я]{2,}) ([А-я]{2,})')
 
-method=('имя и фамилия','дата рождения','e-mail')
-suffix=('ые ','ая ','ый ')
-
-def error(message):
-    bot.send_message(message.chat.id,'Не правильн'+suffix[suf_ind]+method[meth_ind]+', попробуйте еще раз.')
-    if step == 1:
-        get_fullName(message)
-    elif step == 2:
-        get_dob(message)
-    elif step == 3:
-        get_email(message)
-
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.send_message(message.chat.id,'Вас приветствует DigitalCitizenBot!\n'
                      'Здесь Вы сможете оставить жалобу или обращение по любому интересующему Вас вопросу.')
     check_number(message)
 
+#  ------------------
+# | Регистрация/вход |
+#  ------------------
+
 def check_number(message):
-    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    keyboard=types.ReplyKeyboardMarkup(resize_keyboard=True)
     checkPhone_button=types.KeyboardButton(text='Отправить номер телефона',request_contact=True)
     keyboard.add(checkPhone_button)
     bot.send_message(message.chat.id,'Пожалуйста, отправьте номер телефона, чтобы мы проверили Вашу регистрацию.',reply_markup=keyboard)
@@ -51,7 +43,7 @@ def check_reg(message):
         cursor=conn.cursor()
         result=cursor.execute('Select * from users where number="%s"'%(user_data['number'])).fetchone()
         if result is not None:
-            bot.send_message(message.chat.id,'vy zaregany')
+            main_menu(message)
         else:
             reg(message)
 
@@ -62,10 +54,6 @@ def reg(message):
     get_fullName(message)
         
 def get_fullName(message):
-    global step,suf_ind,meth_ind
-    step=1
-    suf_ind=0
-    meth_ind=0
     keyboard=types.ReplyKeyboardRemove(selective=False)
     bot.send_message(message.chat.id,'Введите полное имя и фамилию:',reply_markup=keyboard)
     bot.register_next_step_handler(message,reg_fullName)
@@ -77,14 +65,11 @@ def reg_fullName(message):
     if valid_fullName:
         get_dob(message)
     else:
-        error(message)
+        bot.send_message(message.chat.id,'Не правильные имя и фамилия, попробуйте еще раз.')
+        get_fullName(message)
 
 def get_dob(message):
-    global step,suf_ind,meth_ind
-    step=2
-    suf_ind=1
-    meth_ind=1
-    bot.send_message(message.chat.id,'Введите дату рождения (в формате mm.dd.yyyy):')
+    bot.send_message(message.chat.id,'Введите дату рождения в формате mm.dd.yyyy:')
     bot.register_next_step_handler(message,reg_dob)
 
 def reg_dob(message):
@@ -93,13 +78,10 @@ def reg_dob(message):
     if valid_dob:
         get_email(message)
     else:
-        error(message)
+        bot.send_message(message.chat.id,'Не правильная дата рождения, попробуйте еще раз.')
+        get_dob(message)
 
 def get_email(message):
-    global step,suf_ind,meth_ind
-    step=3
-    suf_ind=2
-    meth_ind=2
     bot.send_message(message.chat.id,'Введите e-mail для связи:')
     bot.register_next_step_handler(message,reg_email)
 
@@ -109,10 +91,11 @@ def reg_email(message):
     if valid_email:
         check_data(message)
     else:
-        error(message)
+        bot.send_message(message.chat.id,'Не правильный e-mail, попробуйте еще раз.')
+        get_email(message)
 
 def check_data(message):
-    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    keyboard=types.ReplyKeyboardMarkup(resize_keyboard=True)
     confirm_button=types.KeyboardButton('Подтвердить')
     again_button=types.KeyboardButton('Заново')
     keyboard.row(confirm_button,again_button)
@@ -121,15 +104,15 @@ def check_data(message):
                      'Имя и фамилия: '+user_data['fullName']+'\n'
                      'Дата рождения: '+user_data['dob']+'\n'
                      'E-mail адрес: '+user_data['email'],reply_markup=keyboard)
-    bot.register_next_step_handler(message,confirm_data)
+    bot.register_next_step_handler(message,check_dataButton)
 
-def confirm_data(message):
+def check_dataButton(message):
     if message.text=='Подтвердить':
         save_data(message)
     elif message.text=='Заново':
         get_fullName(message)
     else:
-        bot.send_message(message.chat.id,'Пожалуйста, нажмите на кнопку.')
+        bot.send_message(message.chat.id,'Вы не нажали на кнопку.')
         check_data(message)
 
 def save_data(message):
@@ -138,7 +121,44 @@ def save_data(message):
     cursor.execute('Insert into users values ("%s","%s","%s","%s")'% \
                    (user_data['number'],user_data['fullName'],user_data['dob'],user_data['email']))
     conn.commit()
-    bot.send_message(message.chat.id,'После теста отпишитесь мне пожалуйста)')
+    conn.close()
+    keyboard=types.ReplyKeyboardRemove(selective=False)
+    bot.send_message(message.chat.id,'Данные успешно сохранены.',reply_markup=keyboard)
+    main_menu(message)
 
-conn.close()
+#  --------------
+# | Главное меню |
+#  --------------
+
+def main_menu(message):
+    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    about_button=types.KeyboardButton('О проекте')
+    sendMessage_button=types.KeyboardButton('Отправить обращение')
+    myMessages_button=types.KeyboardButton('Мои обращения')
+    feedback_button=types.KeyboardButton('Обратная связь')
+    keyboard.add(sendMessage_button,myMessages_button)
+    keyboard.row(about_button,feedback_button)
+    bot.send_message(message.chat.id,'Выберите действие: ',reply_markup=keyboard)
+    bot.register_next_step_handler(message,check_menuButton)
+
+def check_menuButton(message):
+    if message.text=='Отправить обращение':
+       send_message(message)
+    elif message.text=='Мои обращения':
+        my_messages(message)
+    elif message.text=='О проекте':
+        about(message)
+    elif message.text=='Обратная связь':
+        feedback(message)
+
+def category_sendMessage(message):
+    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    =types.KeyboardButton('О проекте')
+    =types.KeyboardButton('О проекте')
+    =types.KeyboardButton('О проекте')
+    =types.KeyboardButton('О проекте')
+    keyboard.add(sendMessage_button,myMessages_button)
+    bot.send_message(message.chat.id,'Выберите категорию обращения:',reply_markup=keyboard)
+    
+
 bot.polling(none_stop=True)
