@@ -30,9 +30,9 @@ def start(message):
                      'Здесь Вы сможете оставить жалобу или обращение по любому интересующему Вас вопросу.',parse_mode=ParseMode.HTML)
     check_number(message)
 
-#  ------------------
-# | Регистрация/вход |
-#  ------------------
+#  ------
+# | Вход |
+#  ------
 
 def check_number(message):
     keyboard=types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -54,6 +54,10 @@ def check_reg(message):
             main_menu(message)
         else:
             reg(message)
+
+#  -------------
+# | Регистрация |
+#  -------------
 
 def reg(message):
     keyboard=types.ReplyKeyboardRemove(selective=False)
@@ -175,7 +179,8 @@ def get_categories(message):
     editFavoriteCategoriesButton=types.KeyboardButton('Изменить избранные категории')
     mainMenuButton=types.KeyboardButton('Вернуться в меню')
     addCategoryButton=types.KeyboardButton('Своя категория')
-    keyboard.add(category1Button,category2Button,category3Button,allCategoriesButton,editFavoriteCategoriesButton,addCategoryButton,mainMenuButton)
+    keyboard.add(category1Button,category2Button,category3Button,allCategoriesButton, \
+                 editFavoriteCategoriesButton,addCategoryButton,mainMenuButton)
     bot.send_message(message.chat.id,'Выберите категорию обращения:',reply_markup=keyboard)
     bot.register_next_step_handler(message,reg_categories)
     
@@ -279,10 +284,8 @@ def get_myMessages(message):
     if result is not None:
         for result in results:
             number=number+1
-            keyboard=types.ReplyKeyboardMarkup(resize_keyboard=True)
-            mainMenuButton=types.KeyboardButton('Вернуться в меню')
             bot.send_message(message.chat.id,'<b>Номер: %s</b>\n\nКатегория:\n%s\n\nАдрес:\n%s\n\nТекст обращения:\n%s\n\nСтатус:\n%s' \
-                             %(number,result[0],result[1],result[2],result[4]),reply_markup=keyboard,parse_mode=ParseMode.HTML)
+                             %(number,result[0],result[1],result[2],result[4]),parse_mode=ParseMode.HTML)
         main_menu(message)
     else:
         bot.send_message(message.chat.id,'Здесь пока-что пусто.')
