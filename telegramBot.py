@@ -288,7 +288,6 @@ def get_myMessages(message):
                              %(number,result[0],result[1],result[2],result[4]),parse_mode=ParseMode.HTML)
         main_menu(message)
     else:
-        bot.send_message(message.chat.id,'Здесь пока-что пусто.')
         main_menu(message)
 
 #  -----------
