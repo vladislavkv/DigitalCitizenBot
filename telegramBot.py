@@ -15,6 +15,7 @@ cursor=conn.cursor()
 
 send_message={'category':'','address':'','text':''}
 user_data={'number':'','fullName':'','dob':'','email':''}
+admin={'login':'','password':''}
 
 category_pattern=compile('^[А-я ]{2,30}$')
 text_pattern=compile('^[0-9A-zА-я-.,/ \"]{20,1000}$')
@@ -26,8 +27,10 @@ fullName_ruPattern=compile('([А-я]{2,}) ([А-я]{2,})')
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id,'Вас приветствует <b>DigitalCitizenBot!</b>\n' \
-                     'Здесь Вы сможете оставить жалобу или обращение по любому интересующему Вас вопросу.',parse_mode=ParseMode.HTML)
+    conn=sqlite3.connect('editText.db')
+    cursor=conn.cursor()
+    intro=cursor.execute('Select intro from text').fetchone()
+    bot.send_message(message.chat.id,intro)
     check_number(message)
 
 #  ------
@@ -144,13 +147,13 @@ def save_data(message):
 
 def main_menu(message):
     keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
-    about_button=types.KeyboardButton('О проекте')
-    sendMessage_button=types.KeyboardButton('Отправить обращение')
-    myMessages_button=types.KeyboardButton('Мои обращения')
-    feedback_button=types.KeyboardButton('Обратная связь')
-    keyboard.add(sendMessage_button,myMessages_button)
-    keyboard.row(about_button,feedback_button)
-    bot.send_message(message.chat.id,'Выберите действие: ',reply_markup=keyboard)
+    aboutButton=types.KeyboardButton('О проекте')
+    sendMessageButton=types.KeyboardButton('Отправить обращение')
+    myMessagesButton=types.KeyboardButton('Мои обращения')
+    feedbackButton=types.KeyboardButton('Обратная связь')
+    keyboard.add(sendMessageButton,myMessagesButton)
+    keyboard.row(aboutButton,feedbackButton)
+    bot.send_message(message.chat.id,'Выберите действие:',reply_markup=keyboard)
     bot.register_next_step_handler(message,check_menuButtons)
 
 def check_menuButtons(message):
@@ -162,6 +165,8 @@ def check_menuButtons(message):
         about_project(message)
     elif message.text=='Обратная связь':
         feedback(message)
+    elif message.text=='/admin':
+        admin_login(message)
     else:
         bot.send_message(message.chat.id,'Кажется, что у меня нет такой кнопки, выберите существующую.')
         main_menu(message)
@@ -304,8 +309,68 @@ def about_project(message):
 #  ----------------
 
 def feedback(message):
-    bot.send_message(message.chat.id,'<a href="https://telegram.org">Ссылка на сайт</a>',parse_mode=ParseMode.HTML)
+    bot.send_message(message.chat.id,'<a href="%s">Ссылка на сайт</a>'%(feedback_url),parse_mode=ParseMode.HTML)
     main_menu(message)
+
+#  ---------------
+# | Администратор |
+#  ---------------
+
+def admin_login(message):
+    keyboard=types.ReplyKeyboardRemove(selective=False)
+    bot.send_message(message.chat.id,'Введите логин:',reply_markup=keyboard)
+    bot.register_next_step_handler(message,admin_password)
+
+def admin_password(message):
+    admin['login']=message.text
+    bot.send_message(message.chat.id,'Введите пароль:')
+    bot.register_next_step_handler(message,admin_info)
+
+def admin_info(message):
+    admin['password']=message.text
+    conn=sqlite3.connect('usersDatabase.db')
+    cursor=conn.cursor()
+    result=cursor.execute('Select * from admin where login = "%s" and password = "%s"'%(admin['login'],admin['password'])).fetchone()
+    if result is not None:
+        bot.send_message(message.chat.id,'Добро пожаловать в панель администратора.')
+        admin_menu(message)
+    else:
+        bot.send_message(message.chat.id,'Не правильный логин и/или пароль.')
+        main_menu(message)
+
+def admin_menu(message):
+    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    editTitleButton=types.KeyboardButton('Ключевые слова')
+    editTextButton=types.KeyboardButton('Редактировать текст')
+    exitButton=types.KeyboardButton('Выход')
+    keyboard.add(editTitleButton,editTextButton,exitButton)
+    bot.send_message(message.chat.id,'Выберите действие:',reply_markup=keyboard)
+    bot.register_next_step_handler(message,check_adminMenuButtons)
+
+def check_adminMenuButtons(message):
+    if message.text=='Ключевые слова':
+        edit_title(message)
+    elif message.text=='Редактировать текст':
+        admin_menu(message)
+    elif message.text=='Выход':
+        main_menu(message)
+    else:
+        bot.send_message(message.chat.id,'Вы не нажали на кнопку.')
+        admin_menu(message)
+
+def edit_title(message):
+    keyboard=types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True)
+    bot.send_message(message.chat.id,'Напишите текст приветствия:',reply_markup=keyboard)
+    bot.register_next_step_handler(message,commit_title)
+
+def commit_title(message):
+    title=message.text
+    conn=sqlite3.connect('editText.db')
+    cursor=conn.cursor()
+    cursor.execute('update text set intro = "%s"'%(title))
+    conn.commit()
+    bot.send_message(message.chat.id,'Данные сохранены.')
+    admin_menu(message)
 
 conn.close()
 bot.polling(none_stop=True)
